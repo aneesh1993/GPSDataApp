@@ -45,6 +45,7 @@ public class MainActivity extends AppCompatActivity {
     public static final String broadcastString = "com.example.aneesh.gpsdataapp.broadcast";
     public static final String networkType_wifi = "WiFi";
     public static final String networkType_roaming = "Roaming";
+    public static final String netID = "ana85";
 
     ///////////////////////////// Private Variables ////////////////////////////////////////////////
     private IntentFilter intentFilter;
@@ -157,6 +158,19 @@ public class MainActivity extends AppCompatActivity {
             transaction.commit();
         }
 
+        //////// if query selected //////////////
+        if(item.getItemId() == R.id.action_query){
+            isServerFrag = false;
+
+            Fragment newQueryFragment = new QueryFragment();
+            FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
+            transaction.replace(R.id.fragment_container, newQueryFragment);
+            transaction.addToBackStack(null);
+
+            transaction.commit();
+
+        }
+
         return super.onOptionsItemSelected(item);
     }
 
@@ -185,26 +199,12 @@ public class MainActivity extends AppCompatActivity {
                         LocalFragment lf = (LocalFragment)getSupportFragmentManager().findFragmentById(R.id.fragment_container);
                         lf.populateList(dbHandler.readDB());
                     }
-                    else if(getSupportFragmentManager().findFragmentById(R.id.fragment_container) != null &&
-                            getSupportFragmentManager().findFragmentById(R.id.fragment_container).
-                                    toString().startsWith("ServerFragment")){
-
-                        ////////////// do server fragment populate list here /////////////////
-                        ServerFragment sf = (ServerFragment)getSupportFragmentManager().findFragmentById(R.id.fragment_container);
-                        readFirebaseDB();
-                        sf.populateList(serverDataList);
-                        serverDataList.clear();
-                    }
-
 
                 }
                 else{ //// (means it is landscape) //////
                     LocalFragment lf = (LocalFragment)getSupportFragmentManager().findFragmentById(R.id.fragment_local);
                     lf.populateList(dbHandler.readDB());
-                    ////////////// do server fragment populate list as well /////////////////
-                    ServerFragment sf = (ServerFragment)getSupportFragmentManager().findFragmentById(R.id.fragment_server);
-                    sf.populateList(serverDataList);
-                    serverDataList.clear();
+
                 }
 
                 ////////////////////// check if wifi and upload data to server /////////////////////
@@ -323,59 +323,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    ///////////////////////////////////// setServerListView ////////////////////////////////////////
-    public void setServerListView(ArrayList<String> serverDataList){
-        if(getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT){
-
-            if(getSupportFragmentManager().findFragmentById(R.id.fragment_container).
-                    toString().startsWith("ServerFragment")){
-
-                ServerFragment sf = (ServerFragment)getSupportFragmentManager().findFragmentById(R.id.fragment_container);
-                sf.populateList(serverDataList);
-            }
-        }
-        else{
-            ServerFragment sf = (ServerFragment)getSupportFragmentManager().findFragmentById(R.id.fragment_server);
-            sf.populateList(serverDataList);
-        }
-    }
-
-    ////////////////////////////// To Read Firebase Database ///////////////////////////////////////
-
-    public void readFirebaseDB(){
-
-
-        db = FirebaseDatabase.getInstance();
-        Query ref = db.getReference().orderByChild("Students");
-        ref.addValueEventListener(new ValueEventListener() {
-            @Override
-            public void onDataChange(DataSnapshot gpsdata) {
-
-                for(DataSnapshot students : gpsdata.getChildren()){     // one child
-
-                    for(DataSnapshot netid : students.getChildren()){   // one child
-
-                        for(DataSnapshot dateTime : netid.getChildren()){   // multiple children
-
-                            for(DataSnapshot mainData : dateTime.getChildren()){    // 4 children
-                                //System.out.println(mainData.getValue());
-                                resultString += mainData.getValue().toString();
-                                resultString += " ";
-                            }
-                            serverDataList.add(resultString);
-                            resultString = "";
-                        }
-                    }
-                }
-                System.out.println(serverDataList);
-            }
-
-            @Override
-            public void onCancelled(DatabaseError databaseError) {
-
-            }
-        });
-    }
 
 
     ///////////////////////// Async Task to upload data to server //////////////////////////////////
@@ -391,12 +338,12 @@ public class MainActivity extends AppCompatActivity {
 
                 splitData = data.get(i).split("\t");
                 DatabaseReference ref = FirebaseDatabase.getInstance().getReference("Students"); // What database can I actually talk to?
-                DatabaseReference students = ref.child("ana85");
+                DatabaseReference students = ref.child(netID);
                 DatabaseReference bart = students.child(splitData[0]);
                 bart.child("date").setValue(splitData[0]);
                 bart.child("x").setValue(splitData[1]);
                 bart.child("y").setValue(splitData[2]);
-                bart.child("netid").setValue("ana85");
+                bart.child("netid").setValue(netID);
 
             }
 

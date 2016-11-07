@@ -3,9 +3,11 @@ package com.example.aneesh.gpsdataapp;
 
 import android.os.Bundle;
 
+import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 
 import android.util.Log;
+
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -14,6 +16,12 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.ListView;
 import android.widget.TextView;
+
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 
 import java.util.ArrayList;
 
@@ -30,10 +38,14 @@ public class ServerFragment extends Fragment {
 
     ListView serverList;
     TextView serverStatus, networkType;
-    String networkDetails = "";
     Button syncButton;
 
-    ArrayList<String> serverDBList;
+    String networkDetails = "";
+
+    ArrayList<String> serverDBList = new ArrayList<>();
+    ArrayAdapter<String> adapter;
+
+    FirebaseDatabase db;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
@@ -61,10 +73,56 @@ public class ServerFragment extends Fragment {
         return view;
     }
 
+    @Override
+    public void onActivityCreated(@Nullable Bundle savedInstanceState) {
+        super.onActivityCreated(savedInstanceState);
+        populateList(serverDBList);
+        readFirebaseDB();
+
+    }
+
+    ////////////////////////////// To Read Firebase Database ///////////////////////////////////////
+
+    public void readFirebaseDB(){
+
+        serverDBList.clear();
+        db = FirebaseDatabase.getInstance();
+        DatabaseReference ref = db.getReference("Students");
+        final StringBuffer resultString = new StringBuffer();
+        ref.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot students) {
+
+                    for(DataSnapshot netid : students.getChildren()){   // one child
+
+                        for(DataSnapshot dateTime : netid.getChildren()){   // multiple children
+
+                            for(DataSnapshot mainData : dateTime.getChildren()){    // 4 children
+                                //System.out.println(mainData.getValue());
+                                resultString.append(mainData.getValue() + " ");
+
+
+                            }
+                            serverDBList.add(resultString.toString());
+                            resultString.delete(0, resultString.length());
+                        }
+                    }
+                adapter.notifyDataSetChanged();
+                System.out.println(serverDBList);
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+
+            }
+        });
+    }
+
+
     public void populateList(ArrayList<String> list){
-        System.out.println("HEREEE!!");
+
         serverDBList = list;
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(getActivity(), android.R.layout.simple_list_item_1, list);
+        adapter = new ArrayAdapter<>(getActivity(), android.R.layout.simple_list_item_1, list);
         serverList.setAdapter(adapter);
     }
 
