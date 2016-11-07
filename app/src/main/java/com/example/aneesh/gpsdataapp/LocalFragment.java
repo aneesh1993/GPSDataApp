@@ -2,10 +2,15 @@ package com.example.aneesh.gpsdataapp;
 
 
 import android.os.Bundle;
+
 import android.support.v4.app.Fragment;
+
+import android.util.Log;
+
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
 
@@ -32,12 +37,16 @@ public class LocalFragment extends Fragment {
         View view = inflater.inflate(R.layout.fragment_local, container, false);
         listView = (ListView) view.findViewById(R.id.localList);
 
-
         return view;
     }
 
+
     public void populateList(ArrayList<String> list){
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(getActivity(), android.R.layout.simple_list_item_1, list);
+        localDBList = list;
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(getActivity(), android.R.layout.simple_list_item_1, list);
         listView.setAdapter(adapter);
     }
+
+
+
 }

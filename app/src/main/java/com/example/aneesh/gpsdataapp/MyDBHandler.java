@@ -2,9 +2,11 @@ package com.example.aneesh.gpsdataapp;
 
 import android.content.ContentValues;
 import android.content.Context;
+
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+
 import android.util.Log;
 
 import java.util.ArrayList;
@@ -16,7 +18,7 @@ public class MyDBHandler extends SQLiteOpenHelper{
 
     // Database version and name
     private static final int DATABASE_VERSION = 1;
-    private static final String DATABASE_NAME = "GPSData3.db";
+    private static final String DATABASE_NAME = "GPSData11.db";
 
     // table name
     public static final String GPS_TABLE_NAME = "GPSData";

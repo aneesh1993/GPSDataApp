@@ -1,29 +1,64 @@
 package com.example.aneesh.gpsdataapp;
 
+import android.*;
+import android.Manifest;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.location.Location;
-import android.location.LocationListener;
-import android.location.LocationManager;
+import android.content.res.Configuration;
+
+import android.net.ConnectivityManager;
+
+import android.os.AsyncTask;
+import android.os.Bundle;
+
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentTransaction;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
 import android.support.v7.widget.Toolbar;
+
 import android.util.Log;
+
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.View;
+
 import android.widget.Toast;
+
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.Query;
+import com.google.firebase.database.ValueEventListener;
+
+import java.util.ArrayList;
+import java.util.jar.*;
+
 
 public class MainActivity extends AppCompatActivity {
 
-    Toolbar toolbar;
+    ///////////////////////////// Final Variables //////////////////////////////////////////////////
     public static final String broadcastString = "com.example.aneesh.gpsdataapp.broadcast";
+    public static final String networkType_wifi = "WiFi";
+    public static final String networkType_roaming = "Roaming";
+
+    ///////////////////////////// Private Variables ////////////////////////////////////////////////
     private IntentFilter intentFilter;
+    private FirebaseDatabase db;
+    private String networkDetails;
+
+    ///////////////////////////// Public Variables /////////////////////////////////////////////////
+    Toolbar toolbar;
     MyDBHandler dbHandler;
+    public boolean isWifi, isMobile, isServerFrag;
+    public String networkInfo, serverStauts;
+    public String resultString = "";
+    ArrayList<String>serverDataList = new ArrayList<>();
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -34,42 +69,25 @@ public class MainActivity extends AppCompatActivity {
         setSupportActionBar(toolbar);
         dbHandler = new MyDBHandler(this, null, null, 1);
 
-        ////////////////// Start the Service ////////////////////////
+        ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_COARSE_LOCATION,
+                Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.INTERNET}, 1);
+
+
+        /////////////////////////////// Start the Service //////////////////////////////////////////
         Intent intent = new Intent(this, GPSDataService.class);
         startService(intent);
 
         intentFilter = new IntentFilter();
         intentFilter.addAction(broadcastString);
-
-    }
-
-    @Override
-    public void onResume()
-    {
-        super.onResume();
-        registerReceiver(broadcastReceiver, intentFilter);
-    }
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-
-        MenuInflater inflater = getMenuInflater();
-        inflater.inflate(R.menu.menu_main, menu);
-
-        Toast.makeText(MainActivity.this, "Select a database - Local or Server from the toolbar",
-                Toast.LENGTH_SHORT).show();
+        intentFilter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
+        intentFilter.addAction(networkType_wifi);
+        intentFilter.addAction(networkType_roaming);
 
 
-        return super.onCreateOptionsMenu(menu);
-    }
+        /////////////////////////////// default Server Fragment ////////////////////////////////////
 
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-
-        if(item.getItemId() == R.id.action_online){
-            Toast.makeText(MainActivity.this, "archive", Toast.LENGTH_SHORT).show();
-
-            ///////////// Replacing Fragment with Global //////////////////////////////////
+        if(getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT){
+            isServerFrag = true;
             Fragment newServerFragment = new ServerFragment();
 
             FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
@@ -80,12 +98,58 @@ public class MainActivity extends AppCompatActivity {
 
         }
 
+    }
+
+    ///////////////////////////// Register Intent Filter ///////////////////////////////////////////
+    @Override
+    public void onResume()
+    {
+        super.onResume();
+        registerReceiver(broadcastReceiver, intentFilter);
+    }
+
+    //////////////////////////////// Toolbar View //////////////////////////////////////////////////
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.menu_main, menu);
+
+        Toast.makeText(MainActivity.this, "Select a database - Local or Server from the toolbar",
+                Toast.LENGTH_SHORT).show();
+
+        return super.onCreateOptionsMenu(menu);
+    }
+
+    //////////////////////////// Toolbar Option Listener ///////////////////////////////////////////
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+
+        //////// if online selected //////////////
+        if(item.getItemId() == R.id.action_online){
+
+            isServerFrag = true;
+            Bundle args = new Bundle();
+            Log.i("networkInfo", networkInfo);
+            args.putString("networkInfo", networkInfo);
+            args.putString("serverStatus", serverStauts);
+
+            Fragment newServerFragment = new ServerFragment();
+            newServerFragment.setArguments(args);
+            FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
+            transaction.replace(R.id.fragment_container, newServerFragment);
+            transaction.addToBackStack(null);
+
+            transaction.commit();
+
+        }
+
+        //////// if offline selected //////////////
         if(item.getItemId() == R.id.action_offline){
-            Toast.makeText(MainActivity.this, "offline", Toast.LENGTH_SHORT).show();
 
-            ///////////// Replacing Fragment with Local //////////////////////////////////
+            isServerFrag = false;
+
             Fragment newLocalFragment = new LocalFragment();
-
             FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
             transaction.replace(R.id.fragment_container, newLocalFragment);
             transaction.addToBackStack(null);
@@ -96,23 +160,257 @@ public class MainActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
+    //////////////////////////////// Broadcast Receiver ////////////////////////////////////////////
     private BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
+
         @Override
         public void onReceive(Context context, Intent intent) {
 
-                if(intent.getAction().equals(broadcastString)){
+            ///////////////////// GPS Data update //////////////////////////////
+            ///////// do 2 things -------->
+            //////// 1. populate lists (local and server)
+            //////// 2. check if wifi and upload data to server
+
+            if(intent.getAction().equals(broadcastString)){
+
+                ////////////////////// If portrait ///////////////////////////////////////////
+                if(getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT){
+
+
+                    /////////////////////// Local Fragment populate list /////////////////////////////
                     if(getSupportFragmentManager().findFragmentById(R.id.fragment_container) != null &&
-                            getSupportFragmentManager().findFragmentById(R.id.fragment_container).toString().startsWith("LocalFragment")){
+                            getSupportFragmentManager().findFragmentById(R.id.fragment_container).
+                                    toString().startsWith("LocalFragment")){
 
                         LocalFragment lf = (LocalFragment)getSupportFragmentManager().findFragmentById(R.id.fragment_container);
                         lf.populateList(dbHandler.readDB());
                     }
-                    Intent stopIntent = new Intent(MainActivity.this, GPSDataService.class);
-                    stopService(stopIntent);
+                    else if(getSupportFragmentManager().findFragmentById(R.id.fragment_container) != null &&
+                            getSupportFragmentManager().findFragmentById(R.id.fragment_container).
+                                    toString().startsWith("ServerFragment")){
+
+                        ////////////// do server fragment populate list here /////////////////
+                        ServerFragment sf = (ServerFragment)getSupportFragmentManager().findFragmentById(R.id.fragment_container);
+                        readFirebaseDB();
+                        sf.populateList(serverDataList);
+                        serverDataList.clear();
+                    }
+
+
+                }
+                else{ //// (means it is landscape) //////
+                    LocalFragment lf = (LocalFragment)getSupportFragmentManager().findFragmentById(R.id.fragment_local);
+                    lf.populateList(dbHandler.readDB());
+                    ////////////// do server fragment populate list as well /////////////////
+                    ServerFragment sf = (ServerFragment)getSupportFragmentManager().findFragmentById(R.id.fragment_server);
+                    sf.populateList(serverDataList);
+                    serverDataList.clear();
+                }
+
+                ////////////////////// check if wifi and upload data to server /////////////////////
+                if(isWifi){
+                    new FirebaseUpload().execute(dbHandler.readDB());
+                }else{
+                    System.out.println("No Wifi");
+                    Toast.makeText(MainActivity.this, "Cannot upload data... No Wifi!\n" +
+                            "Press Sync to upload using Mobile data", Toast.LENGTH_SHORT).show();
+                    setServerStatus("Not Connected");
+                    serverStauts = "Not Connected";
+                }
+            }
+            Intent stopIntent = new Intent(MainActivity.this, GPSDataService.class);
+            stopService(stopIntent);
+
+
+            ////////////////// Network Type Update ///////////////////////////////////
+            ///////// do 2 things -------->
+            //////// 1. set variables in Main Activity
+            //////// 2. set TextViews in Server Fragment
+            if(intent.getAction().equals(ConnectivityManager.CONNECTIVITY_ACTION)){
+
+                Bundle extras = intent.getExtras();
+                if (extras != null) {
+
+                    if(extras.get("networkType").equals(ConnectivityManager.TYPE_MOBILE)){
+                        networkInfo = "Mobile Network";
+                        isMobile = true;
+                        isWifi = false;
+                    }
+                    else if(extras.get("networkType").equals(ConnectivityManager.TYPE_WIFI) &&
+                            !extras.get("extraInfo").equals("<unknown ssid>")){
+
+                        networkInfo = "WiFi: " + extras.get("extraInfo");
+                        isMobile = false;
+                        isWifi = true;
+                    }
+                    else{
+                        networkInfo = "No Network";
+                        isMobile = isWifi = false;
+                    }
+
+                    if(getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE){
+
+                        ServerFragment serverFragment = (ServerFragment)getSupportFragmentManager().
+                                findFragmentById(R.id.fragment_server);
+
+                        serverFragment.setNetworkStatus(networkInfo);
+                    }
+                    else if(getSupportFragmentManager().findFragmentById(R.id.fragment_container) != null &&
+                                getSupportFragmentManager().findFragmentById(R.id.fragment_container).
+                                        toString().startsWith("ServerFragment")){
+
+                        networkDetails = networkInfo;
+
+                        if(getSupportFragmentManager().findFragmentById(R.id.fragment_container) != null &&
+                                getSupportFragmentManager().findFragmentById(R.id.fragment_container).
+                                        toString().startsWith("ServerFragment")){
+
+                            ServerFragment serverFragment = (ServerFragment)getSupportFragmentManager().
+                                    findFragmentById(R.id.fragment_container);
+                            serverFragment.setNetworkStatus(networkDetails);
+                        }
+
+                    }
+
+                }
+                else {
+                    Log.v("Connectivity", "no extras");
                 }
 
             }
+        }
 
 
     };
+
+    /////////////////////////////// Sync Button Click Listener /////////////////////////////////////
+    public void syncClick(View view) {
+
+        ////////////// if wifi or mobile data available, upload data to server /////////////////////
+        ///////////// if nothing available, set TextView as not connected and give a Toast//////////
+        if(isWifi || isMobile){
+            new FirebaseUpload().execute(dbHandler.readDB());
+        }
+        else{
+            Toast.makeText(MainActivity.this, "Cannot upload data... No Connectivity", Toast.LENGTH_SHORT).show();
+            setServerStatus("Not Connected");
+            serverStauts = "Not Connected";
+        }
+
+    }
+
+    ////////////////////// Method checks portrait(if yes, is server fragment available), or landscape
+    ////////////////////// and sets the 'server status' TextView
+    public void setServerStatus(String status){
+        if(getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT){
+
+            if(getSupportFragmentManager().findFragmentById(R.id.fragment_container) != null &&
+                    getSupportFragmentManager().findFragmentById(R.id.fragment_container).
+                            toString().startsWith("ServerFragment")){
+
+                ServerFragment sf = (ServerFragment)getSupportFragmentManager().findFragmentById(R.id.fragment_container);
+                sf.setConnectionStatus(status);
+
+            }
+        }
+        else{
+
+            if(getSupportFragmentManager().findFragmentById(R.id.fragment_server) != null){
+                ServerFragment sf = (ServerFragment)getSupportFragmentManager().findFragmentById(R.id.fragment_server);
+                sf.setConnectionStatus("Connected");
+                serverStauts = "Connected";
+            }
+        }
+    }
+
+    ///////////////////////////////////// setServerListView ////////////////////////////////////////
+    public void setServerListView(ArrayList<String> serverDataList){
+        if(getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT){
+
+            if(getSupportFragmentManager().findFragmentById(R.id.fragment_container).
+                    toString().startsWith("ServerFragment")){
+
+                ServerFragment sf = (ServerFragment)getSupportFragmentManager().findFragmentById(R.id.fragment_container);
+                sf.populateList(serverDataList);
+            }
+        }
+        else{
+            ServerFragment sf = (ServerFragment)getSupportFragmentManager().findFragmentById(R.id.fragment_server);
+            sf.populateList(serverDataList);
+        }
+    }
+
+    ////////////////////////////// To Read Firebase Database ///////////////////////////////////////
+
+    public void readFirebaseDB(){
+
+
+        db = FirebaseDatabase.getInstance();
+        Query ref = db.getReference().orderByChild("Students");
+        ref.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot gpsdata) {
+
+                for(DataSnapshot students : gpsdata.getChildren()){     // one child
+
+                    for(DataSnapshot netid : students.getChildren()){   // one child
+
+                        for(DataSnapshot dateTime : netid.getChildren()){   // multiple children
+
+                            for(DataSnapshot mainData : dateTime.getChildren()){    // 4 children
+                                //System.out.println(mainData.getValue());
+                                resultString += mainData.getValue().toString();
+                                resultString += " ";
+                            }
+                            serverDataList.add(resultString);
+                            resultString = "";
+                        }
+                    }
+                }
+                System.out.println(serverDataList);
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+
+            }
+        });
+    }
+
+
+    ///////////////////////// Async Task to upload data to server //////////////////////////////////
+    public class FirebaseUpload extends AsyncTask<ArrayList<String>, Void, Void>{
+
+        @Override
+        protected Void doInBackground(ArrayList<String>... params) {
+
+            ArrayList<String> data = params[0];
+
+            String[] splitData;
+            for(int i = 0; i < data.size(); i++) {
+
+                splitData = data.get(i).split("\t");
+                DatabaseReference ref = FirebaseDatabase.getInstance().getReference("Students"); // What database can I actually talk to?
+                DatabaseReference students = ref.child("ana85");
+                DatabaseReference bart = students.child(splitData[0]);
+                bart.child("date").setValue(splitData[0]);
+                bart.child("x").setValue(splitData[1]);
+                bart.child("y").setValue(splitData[2]);
+                bart.child("netid").setValue("ana85");
+
+            }
+
+            return null;
+        }
+
+        @Override
+        protected void onPostExecute(Void aVoid) {
+            Toast.makeText(getApplicationContext(), "Data Uploaded to Firebase", Toast.LENGTH_SHORT).show();
+            setServerStatus("Connected");
+            serverStauts = "Connected";
+
+            super.onPostExecute(aVoid);
+        }
+    }
+
 }

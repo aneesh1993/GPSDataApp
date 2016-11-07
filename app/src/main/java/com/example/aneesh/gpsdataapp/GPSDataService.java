@@ -1,22 +1,26 @@
 package com.example.aneesh.gpsdataapp;
 
 import android.app.Service;
+
 import android.content.Context;
 import android.content.Intent;
+
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+
+import android.net.ConnectivityManager;
+
 import android.os.Bundle;
 import android.os.IBinder;
 import android.os.Handler;
 
 import android.util.Log;
-import android.widget.Toast;
 
 import java.text.SimpleDateFormat;
+
 import java.util.Date;
 import java.util.TimeZone;
-import java.util.logging.LogRecord;
 
 
 public class GPSDataService extends Service {
@@ -26,15 +30,22 @@ public class GPSDataService extends Service {
     private static final String LOG_TAG = "gpsdataapp-LOG";
     private static final int WAIT_TIME = 10000;
 
+    public boolean isNetwork = false;
+    public boolean isWifi = false;
+    public boolean isRoaming = false;
+
     Handler timeHandler;
     public String[] dataFromGDP = new String[3];
 
     MyDBHandler dbHandler;
 
+    public ConnectivityManager connectivityManager;
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
 
         getGPSData();
+
         dbHandler = new MyDBHandler(this, null, null, 1);
 
         timeHandler = new Handler();
@@ -43,9 +54,6 @@ public class GPSDataService extends Service {
             public void run() {
 
                 if(dataFromGDP[0] != null && dataFromGDP[1] != null && dataFromGDP[2] != null){
-                    System.out.println(dataFromGDP[0]);
-                    System.out.println(dataFromGDP[1]);
-                    System.out.println(dataFromGDP[2]);
 
                     GPSDataDb dbEntry = new GPSDataDb(dataFromGDP[0], dataFromGDP[1], dataFromGDP[2]);
                     dbHandler.addEntry(dbEntry);
@@ -63,26 +71,30 @@ public class GPSDataService extends Service {
         return Service.START_STICKY;
     }
 
+    public String formatDate(long time){
+
+        Date date = new Date(time);
+        SimpleDateFormat sdf = new SimpleDateFormat("MM-dd hh:mm:ss a");
+
+        sdf.setTimeZone(TimeZone.getTimeZone("EST"));
+        return sdf.format(date);
+
+    }
+
     public void getGPSData(){
+
         LocationManager manager = (LocationManager)getSystemService(Context.LOCATION_SERVICE);
         try {
             final Location loc = manager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-            //Log.i(LOG_TAG, "" + loc.getLatitude() + "*_*" + loc.getLongitude());
-
 
             manager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, new LocationListener() {
                 @Override
                 public void onLocationChanged(Location location) {
 
-                    Date date = new Date(location.getTime());
-                    SimpleDateFormat sdf = new SimpleDateFormat("MM/dd HH:mm:ss a");
-
-                    sdf.setTimeZone(TimeZone.getTimeZone("EST"));
-                    String formattedDate = sdf.format(date);
-
-                    dataFromGDP[0] = formattedDate;
+                    dataFromGDP[0] = formatDate(location.getTime());
                     dataFromGDP[1] = location.getLatitude() + "";
                     dataFromGDP[2] = location.getLongitude() + "";
+
 
                 }
 

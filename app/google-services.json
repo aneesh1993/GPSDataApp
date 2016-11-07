@@ -1,0 +1,42 @@
+{
+  "project_info": {
+    "project_number": "438789238770",
+    "firebase_url": "https://gpsdataapp.firebaseio.com",
+    "project_id": "gpsdataapp",
+    "storage_bucket": "gpsdataapp.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:438789238770:android:f1f82edb2d28070b",
+        "android_client_info": {
+          "package_name": "com.example.aneesh.gpsdataapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "438789238770-pv1opi32fb98mnmqpk9dv5tc71nvik4j.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB3Bq9TXOZRHrmfHT9CetOM7XoNJ7Kuimw"
+        }
+      ],
+      "services": {
+        "analytics_service": {
+          "status": 1
+        },
+        "appinvite_service": {
+          "status": 1,
+          "other_platform_oauth_client": []
+        },
+        "ads_service": {
+          "status": 2
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
